@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <title>基因突变模拟器</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Bootstrap 5 CDN 做基本排版 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body{background:#eef4fb}
+        pre {font-family: "JetBrains Mono",Menlo,Consolas,monospace;}
+        .base-A{color: #e44747;font-weight:600;} /* T 用紫色…自己改 */
+        .base-T{color: #9d2ad6;font-weight:600;}
+        .base-G{color:#27ae60;font-weight:600;}
+        .base-C{color: #28a5ff;font-weight:600;}
+        #history {max-height:220px; overflow-y:auto}
+    </style>
+</head>
+<body class="container py-4">
+
+<h2 class="text-center mb-4 fw-bold">基因突变模拟器 🧬</h2>
+
+<div class="row g-4">
+    <!-- 原始序列 -->
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary-subtle fw-bold">原始序列</div>
+            <div class="card-body">
+                <pre id="origin-template"></pre>
+                <pre id="origin-coding"   class="mb-0"></pre>
+                <pre id="origin-mrna"     class="mb-0"></pre>
+                <div class="mt-2"><span class="fw-bold">氨基酸序列：</span><span id="origin-aa"></span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 控制面板 -->
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-info-subtle fw-bold">控制面板</div>
+            <div class="card-body">
+                <div class="mb-2">选择突变类型：</div>
+                <div class="btn-group mb-3" role="group">
+                    <input type="radio" class="btn-check" name="mutType" id="sub" value="sub" checked>
+                    <label class="btn btn-outline-primary" for="sub">替换</label>
+                    <input type="radio" class="btn-check" name="mutType" id="ins" value="ins">
+                    <label class="btn btn-outline-primary" for="ins">插入</label>
+                    <input type="radio" class="btn-check" name="mutType" id="del" value="del">
+                    <label class="btn btn-outline-primary" for="del">缺失</label>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label">位点 (1-n 或范围 5-10)：</label>
+                    <input id="pos" type="text" class="form-control" placeholder="如 7 或 3-5">
+                </div>
+
+                <div id="base-wrapper" class="mb-3">
+                    <label class="form-label">碱基 (A/T/G/C)：</label>
+                    <input id="base" type="text" maxlength="1" class="form-control" placeholder="仅替换/插入时填写">
+                </div>
+
+                <button id="run" class="btn btn-success me-2">执行突变</button>
+                <button id="reset" class="btn btn-danger">重置</button>
+
+                <div id="tip" class="text-danger mt-3 small"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 突变后序列 -->
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-warning-subtle fw-bold">突变后序列</div>
+            <div class="card-body">
+                <pre id="mut-template"></pre>
+                <pre id="mut-coding"   class="mb-0"></pre>
+                <pre id="mut-mrna"     class="mb-0"></pre>
+                <div class="mt-2"><span class="fw-bold">氨基酸序列：</span><span id="mut-aa"></span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 历史记录 -->
+<div class="card shadow-sm mt-4">
+    <div class="card-header bg-secondary-subtle fw-bold">历史记录</div>
+    <div class="card-body" id="history"></div>
+</div>
+
+<!-- === JavaScript 逻辑 === -->
+<script>
+    /* ---------- DNA utils ---------- */
+    const complementMap = {A:'T', T:'A', G:'C', C:'G'};
+    const codonTable = {
+        /* 苯丙氨酸 Phenylalanine */
+        UUU: '苯丙氨酸', UUC: '苯丙氨酸',
+        /* 亮氨酸 Leucine */
+        UUA: '亮氨酸', UUG: '亮氨酸', CUU: '亮氨酸', CUC: '亮氨酸', CUA: '亮氨酸', CUG: '亮氨酸',
+        /* 异亮氨酸 Isoleucine */
+        AUU: '异亮氨酸', AUC: '异亮氨酸', AUA: '异亮氨酸',
+        /* 甲硫氨酸 Methionine (起始) */
+        AUG: '甲硫氨酸',
+        /* 缬氨酸 Valine */
+        GUU: '缬氨酸', GUC: '缬氨酸', GUA: '缬氨酸', GUG: '缬氨酸',
+        /* 丝氨酸 Serine */
+        UCU: '丝氨酸', UCC: '丝氨酸', UCA: '丝氨酸', UCG: '丝氨酸', AGU: '丝氨酸', AGC: '丝氨酸',
+        /* 脯氨酸 Proline */
+        CCU: '脯氨酸', CCC: '脯氨酸', CCA: '脯氨酸', CCG: '脯氨酸',
+        /* 苏氨酸 Threonine */
+        ACU: '苏氨酸', ACC: '苏氨酸', ACA: '苏氨酸', ACG: '苏氨酸',
+        /* 丙氨酸 Alanine */
+        GCU: '丙氨酸', GCC: '丙氨酸', GCA: '丙氨酸', GCG: '丙氨酸',
+        /* 酪氨酸 Tyrosine */
+        UAU: '酪氨酸', UAC: '酪氨酸',
+        /* 组氨酸 Histidine */
+        CAU: '组氨酸', CAC: '组氨酸',
+        /* 谷氨酰胺 Glutamine */
+        CAA: '谷氨酰胺', CAG: '谷氨酰胺',
+        /* 天冬酰胺 Asparagine */
+        AAU: '天冬酰胺', AAC: '天冬酰胺',
+        /* 赖氨酸 Lysine */
+        AAA: '赖氨酸', AAG: '赖氨酸',
+        /* 天冬氨酸 Aspartic Acid */
+        GAU: '天冬氨酸', GAC: '天冬氨酸',
+        /* 谷氨酸 Glutamic Acid */
+        GAA: '谷氨酸', GAG: '谷氨酸',
+        /* 半胱氨酸 Cysteine */
+        UGU: '半胱氨酸', UGC: '半胱氨酸',
+        /* 色氨酸 Tryptophan */
+        UGG: '色氨酸',
+        /* 精氨酸 Arginine */
+        CGU: '精氨酸', CGC: '精氨酸', CGA: '精氨酸', CGG: '精氨酸', AGA: '精氨酸', AGG: '精氨酸',
+        /* 甘氨酸 Glycine */
+        GGU: '甘氨酸', GGC: '甘氨酸', GGA: '甘氨酸', GGG: '甘氨酸',
+        /* 终止 Stop codons */
+        UAA: '终止', UAG: '终止', UGA: '终止'
+    };
+
+    function complement(template){ // 3'->5' template to 5'->3' coding
+        return template.split('').map(b=>complementMap[b]||b).reverse().join('');
+    }
+    function transcribe(coding){return coding.replace(/T/g,'U');}
+    function translate(mrna){
+        const aa = [];
+        for (let i = 0; i + 2 < mrna.length; i += 3){
+            const codon = mrna.substr(i,3);
+            aa.push(codonTable[codon] || '???');
+        }
+        return aa;
+    }
+    function colour(seq, group=true){
+        // ① 逐字符上色
+        const colouredArr = seq.split('')
+            .map(b => `<span class="base-${b}">${b}</span>`);
+
+        // ② 若不需要分组直接返回
+        if (!group) return colouredArr.join('');
+
+        // ③ 每 3 个为一组插入空格
+        const chunks = [];
+        for (let i = 0; i < colouredArr.length; i += 3) {
+            chunks.push(colouredArr.slice(i, i + 3).join(''));
+        }
+        return chunks.join(' ');
+    }
+
+    /* ---------- 初始数据 ---------- */
+    let templateDNA = 'TAT TGA AAC TTG CGG TGC GAA'.replace(/\s+/g,'').toUpperCase();
+    const originEls = {
+        tpl: document.getElementById('origin-template'),
+        cod: document.getElementById('origin-coding'),
+        mrna: document.getElementById('origin-mrna'),
+        aa:  document.getElementById('origin-aa'),
+    };
+    const mutEls = {
+        tpl: document.getElementById('mut-template'),
+        cod: document.getElementById('mut-coding'),
+        mrna: document.getElementById('mut-mrna'),
+        aa:  document.getElementById('mut-aa'),
+    };
+    const historyBox = document.getElementById('history');
+    function renderAll(tplStr, target){
+        const coding = complement(tplStr);
+        const mrna   = transcribe(coding);
+        const aaArr  = translate(mrna);
+        target.tpl.innerHTML  = 'DNA 模板链 (3\'→5\'):\n'+colour(tplStr);
+        target.cod.innerHTML  = 'DNA 编码链 (5\'→3\'):\n'+colour(coding);
+        target.mrna.innerHTML = 'mRNA  (5\'→3\'):\n'+colour(mrna);
+        target.aa.innerHTML   = aaArr.join(' ');
+    }
+    // init
+    renderAll(templateDNA, originEls);
+    renderAll(templateDNA, mutEls);
+
+    /* ---------- 控件逻辑 ---------- */
+    const posInput = document.getElementById('pos');
+    const baseInput= document.getElementById('base');
+    const runBtn    = document.getElementById('run');
+    const resetBtn  = document.getElementById('reset');
+    const tipEl     = document.getElementById('tip');
+
+    document.querySelectorAll('input[name="mutType"]').forEach(r=>{
+        r.addEventListener('change',()=> baseInput.parentElement.style.display = r.value==='del' ? 'none':'block');
+    });
+    resetBtn.onclick = ()=>{
+        templateDNA = originEls.tpl.textContent.match(/[ATGC]+/g).join('');
+        renderAll(templateDNA, mutEls);
+        historyBox.innerHTML='';
+    };
+    runBtn.onclick = ()=>{
+        const type = document.querySelector('input[name="mutType"]:checked').value;
+        const posRaw = posInput.value.trim();
+        if(!/^\d+(-\d+)?$/.test(posRaw)){tip('位点格式错误');return;}
+        let [start,end] = posRaw.split('-').map(n=>parseInt(n));
+        if(start<1 || start>templateDNA.length){tip('位点超出范围');return;}
+        if(!end) end=start;
+        if(end<start||end>templateDNA.length){tip('范围错误');return;}
+        let base = baseInput.value.trim().toUpperCase();
+        if(type!=='del' && !/^[ATGC]$/.test(base)){tip('请输入 A/T/G/C');return;}
+        // 执行突变
+        let before = templateDNA;
+        if(type==='sub'){
+            templateDNA = before.slice(0,start-1)+base+before.slice(start);
+        }else if(type==='ins'){
+            templateDNA = before.slice(0,start-1)+base+before.slice(start-1);
+        }else{ // del
+            templateDNA = before.slice(0,start-1)+before.slice(end);
+        }
+        renderAll(templateDNA, mutEls);
+        addHistory(type,posRaw,base,before,templateDNA);
+        tip('');
+    };
+    function tip(msg){tipEl.textContent=msg;}
+
+    function addHistory(type,pos,base,before,after){
+        const li = document.createElement('div');
+        const descType = {sub:'替换',ins:'插入',del:'缺失'}[type];
+        li.innerHTML =
+            `<div class="small mb-1"><strong>操作描述：</strong>在模板链位置 ${pos} 发生${descType}${type!=='del'?` (→ <span class="base-${base}">${base}</span>)`:''}</div>`+
+            `<div class="small">突变前 DNA (3'-5')： ${colour(before)}</div>`+
+            `<div class="small mb-2">突变后 DNA (3'-5')： ${colour(after)}</div>`;
+        historyBox.prepend(li);
+    }
+</script>
+</body>
+</html>
