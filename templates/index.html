@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>基因突变模拟器</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Material Web (MD3) -->
+  <script type="module" src="https://esm.run/@material/web@latest/all.js"></script>
+
+  <!-- Roboto 字体 + Material Icons -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+  <style>
+    :root{
+      --md-sys-color-primary: #6643ca;
+      --md-sys-color-on-primary:#fff;
+      --md-sys-color-surface:#fafafa;
+      --md-sys-color-on-surface:#1c1b1f;
+    }
+    @media (prefers-color-scheme:dark){
+      :root{
+        --md-sys-color-primary: #6643ca;
+        --md-sys-color-surface:#1c1b1f;
+        --md-sys-color-on-surface:#e6e1e5;
+      }
+      body{background:#121212;}
+    }
+    body{
+      margin:0;
+      font-family:"Roboto",system-ui,Arial;
+      background:#eef4fb;
+    }
+    main{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(330px,1fr));
+      gap:1rem;
+      padding:96px 1rem 2rem;
+      max-width:1200px;
+      margin-inline:auto;
+      align-items:start;
+    }
+    md-filled-card,md-outlined-card,md-elevated-card{
+      padding:1.5rem;
+      box-sizing:border-box;
+    }
+    .controls{display:flex;flex-direction:column;gap:1rem}
+    .input-row{
+      display:flex;
+      flex-direction:column;
+      gap:1rem;
+      width:100%;
+    }
+    .btn-row{display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:flex-start}
+    md-outlined-text-field{
+      width:100%;
+    }
+    pre{font-family:"JetBrains Mono",Menlo,Consolas,monospace;line-height:1.4;white-space:pre-wrap;word-break:break-word}
+    .base-A{color:#e44747;font-weight:600}.base-T{color:#9d2ad6;font-weight:600}.base-G{color:#27ae60;font-weight:600}.base-C{color:#28a5ff;font-weight:600}
+    .history{max-height:280px;overflow-y:auto}
+    /* ===== Segmented pill buttons (high‑contrast) ===== */
+    md-outlined-segmented-button{
+      cursor:pointer;
+      border:2px solid var(--md-sys-color-primary);
+      background:transparent;
+      color:var(--md-sys-color-primary);
+      border-radius:100px;
+      padding-inline:32px;   /* wider click area */
+      height:46px;           /* taller click area */
+      min-width:32px;        /* ensure pill isn't too narrow */
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:600;
+      font-size:1.05rem;
+      transition:
+        background .25s cubic-bezier(.4,0,.2,1),
+        color .25s cubic-bezier(.4,0,.2,1),
+        box-shadow .25s cubic-bezier(.4,0,.2,1),
+        transform .25s cubic-bezier(.4,0,.2,1);
+    }
+
+    /* Execute button */
+    .btn-row md-filled-button{
+      height:56px;
+      padding-inline:32px;
+      font-size:1.05rem;
+      border-radius:999px;
+      display:flex;align-items:center;justify-content:center;
+    }
+
+    /* Reset button – light fill, purple border & text */
+    .btn-row md-tonal-button{
+      height:56px;
+      padding-inline:32px;
+      font-size:1.05rem;
+      background:color-mix(in srgb, var(--md-sys-color-primary) 0%, #ffffff 0%);
+      color:var(--md-sys-color-primary);
+      border:2px solid var(--md-sys-color-primary);
+      border-radius:999px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      transition:background .25s cubic-bezier(.4,0,.2,1);
+    }
+    .btn-row md-tonal-button:hover{
+      background:color-mix(in srgb, var(--md-sys-color-primary) 20%, #ffffff 80%);
+    }
+    md-outlined-segmented-button:hover{
+      background:color-mix(in srgb, var(--md-sys-color-primary) 10%, transparent);
+    }
+    md-outlined-segmented-button[selected]{
+      background:var(--md-sys-color-primary);
+      color:var(--md-sys-color-on-primary);
+      border-color:var(--md-sys-color-primary);
+      box-shadow:0 3px 8px rgba(0,0,0,.25);
+      transform:translateY(-2px);
+    }
+    md-outlined-segmented-button[selected]:hover{
+      background:color-mix(in srgb, var(--md-sys-color-primary) 90%, #000 5%);
+    }
+    .module:nth-of-type(1),
+    .module:nth-of-type(2){
+      border-right:1px solid rgba(0,0,0,.12);
+    }
+    /* Arrange pill buttons in a single horizontal row */
+    #typeSeg{
+      display:flex;
+      flex-wrap:nowrap;
+      gap:1rem;
+      justify-content:flex-start;
+    }
+    /* Allow pills to size to content rather than full width */
+    md-outlined-segmented-button{
+      flex:0 0 auto;
+    }
+    /* Center title inside md-top-app-bar */
+    md-top-app-bar [slot="title"]{
+      flex:1;
+      text-align:center;
+      font-weight:600;
+    }
+
+
+    /* ===== Bigger centered title ===== */
+    md-top-app-bar [slot="title"]{
+      flex:1;
+      text-align:center;
+      font-weight:600;
+      font-size:1.6rem;         /* increase size */
+    }
+    @media(min-width:600px){
+      md-top-app-bar [slot="title"]{
+        font-size:1.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<md-top-app-bar>
+  <div slot="title">基因突变模拟器</div>
+</md-top-app-bar>
+
+<main>
+  <md-filled-card class="module">
+    <h3 class="md-headline-small">原始序列</h3>
+    <pre id="originDNA"></pre>
+  </md-filled-card>
+
+  <md-outlined-card class="module">
+    <h3 class="md-headline-small">控制面板</h3>
+    <div class="controls">
+      <p class="md-body-medium">选择突变类型：</p>
+      <md-segmented-button id="typeSeg">
+        <md-outlined-segmented-button selected value="sub"><span slot="label">替换</span></md-outlined-segmented-button>
+        <md-outlined-segmented-button value="ins"><span slot="label">插入</span></md-outlined-segmented-button>
+        <md-outlined-segmented-button value="del"><span slot="label">缺失</span></md-outlined-segmented-button>
+      </md-segmented-button>
+
+      <div class="input-row">
+        <md-outlined-text-field id="posInput" label="位点或区间" supporting-text="如 7 或 3-5"></md-outlined-text-field>
+        <md-outlined-text-field id="baseInput" label="碱基 A/T/G/C"></md-outlined-text-field>
+      </div>
+
+      <div class="btn-row">
+        <md-filled-button id="runBtn">执行突变</md-filled-button>
+        <md-tonal-button id="resetBtn">重置</md-tonal-button>
+      </div>
+
+      <md-assist-chip id="tip" style="margin-top:1rem;display:none"></md-assist-chip>
+    </div>
+  </md-outlined-card>
+
+  <md-elevated-card class="module">
+    <h3 class="md-headline-small">突变后序列</h3>
+    <pre id="mutDNA"></pre>
+  </md-elevated-card>
+
+  <md-outlined-card style="grid-column:1/-1">
+    <h3 class="md-headline-small">历史记录</h3>
+    <div id="historyList" class="history"></div>
+  </md-outlined-card>
+</main>
+
+<script type="module">
+  // Toggle selection for segmented buttons
+  document.querySelectorAll('#typeSeg md-outlined-segmented-button')
+    .forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        btn.parentElement.querySelectorAll('md-outlined-segmented-button')
+          .forEach(b=>b.removeAttribute('selected'));
+        btn.setAttribute('selected','');
+        btn.parentElement.querySelectorAll('md-outlined-segmented-button')
+           .forEach(b=>b.setAttribute('aria-pressed', b.hasAttribute('selected')));
+        updateBaseFieldVisibility();
+      });
+    });
+
+  // Ensure first button is selected visually
+  document.querySelector('#typeSeg md-outlined-segmented-button[selected]')
+          ?.setAttribute('aria-pressed','true');
+
+  const baseField = document.getElementById('baseInput');
+  // Show or hide base input when 'del' is selected
+  function updateBaseFieldVisibility(){
+    const sel = document.querySelector('#typeSeg md-outlined-segmented-button[selected]')?.getAttribute('value');
+    if(sel === 'del'){
+      baseField.style.display = 'none';
+    } else {
+      baseField.style.display = '';
+    }
+  }
+  // Initial visibility
+  updateBaseFieldVisibility();
+
+  // DNA utils
+  const complementMap={A:'T',T:'A',G:'C',C:'G'};
+  const codonTable={UUU:'苯丙氨酸',UUC:'苯丙氨酸',UUA:'亮氨酸',UUG:'亮氨酸',CUU:'亮氨酸',CUC:'亮氨酸',CUA:'亮氨酸',CUG:'亮氨酸',AUU:'异亮氨酸',AUC:'异亮氨酸',AUA:'异亮氨酸',AUG:'甲硫氨酸',GUU:'缬氨酸',GUC:'缬氨酸',GUA:'缬氨酸',GUG:'缬氨酸',UCU:'丝氨酸',UCC:'丝氨酸',UCA:'丝氨酸',UCG:'丝氨酸',AGU:'丝氨酸',AGC:'丝氨酸',CCU:'脯氨酸',CCC:'脯氨酸',CCA:'脯氨酸',CCG:'脯氨酸',ACU:'苏氨酸',ACC:'苏氨酸',ACA:'苏氨酸',ACG:'苏氨酸',GCU:'丙氨酸',GCC:'丙氨酸',GCA:'丙氨酸',GCG:'丙氨酸',UAU:'酪氨酸',UAC:'酪氨酸',CAU:'组氨酸',CAC:'组氨酸',CAA:'谷氨酰胺',CAG:'谷氨酰胺',AAU:'天冬酰胺',AAC:'天冬酰胺',AAA:'赖氨酸',AAG:'赖氨酸',GAU:'天冬氨酸',GAC:'天冬氨酸',GAA:'谷氨酸',GAG:'谷氨酸',UGU:'半胱氨酸',UGC:'半胱氨酸',UGG:'色氨酸',CGU:'精氨酸',CGC:'精氨酸',CGA:'精氨酸',CGG:'精氨酸',AGA:'精氨酸',AGG:'精氨酸',GGU:'甘氨酸',GGC:'甘氨酸',GGA:'甘氨酸',GGG:'甘氨酸',UAA:'终止',UAG:'终止',UGA:'终止'};
+
+  function complement(seq){return seq.split('').map(b=>complementMap[b]).reverse().join('');}
+  function transcribe(coding){return coding.replace(/T/g,'U');}
+  function translate(mrna){
+    const aa=[];
+    for(let i=0;i+2<mrna.length;i+=3){
+      const cod=mrna.substr(i,3);
+      aa.push(codonTable[cod]||'???');
+    }
+    return aa;
+  }
+  function colour(seq,group=true){
+    const arr=seq.split('').map(b=>`<span class="base-${b}">${b}</span>`);
+    if(!group)return arr.join('');
+    const out=[];for(let i=0;i<arr.length;i+=3)out.push(arr.slice(i,i+3).join(''));
+    return out.join(' ');
+  }
+
+  // Initial render
+  let templateDNA='TATTGAAACTTGCGGTGCGAA';
+  const originDNA=document.getElementById('originDNA');
+  const mutDNA=document.getElementById('mutDNA');
+  const historyList=document.getElementById('historyList');
+  const tipChip=document.getElementById('tip');
+
+  function renderAll(tpl,target){
+      const coding = complement(tpl);
+      const mrna = transcribe(coding);
+      const aa = translate(mrna).join(' ');
+      target.innerHTML =
+          'DNA 模板链 (3′→5′):\n' + colour(tpl) +
+          '\n\nDNA 编码链 (5′→3′):\n' + colour(coding) +
+          '\n\nmRNA (5′→3′):\n' + colour(mrna) +
+          '\n\n氨基酸序列:\n' + aa;
+  }
+  renderAll(templateDNA,originDNA);
+  renderAll(templateDNA,mutDNA);
+
+  // Controls
+  const posInput=document.getElementById('posInput');
+  const baseInput=document.getElementById('baseInput');
+  document.getElementById('runBtn').addEventListener('click',async()=>{
+    const type=document.querySelector('#typeSeg md-outlined-segmented-button[selected]')?.getAttribute('value');
+    if(!type){ showTip('请选择突变类型'); return; }
+    const posRaw=posInput.value.trim();
+    if(!/^\d+(-\d+)?$/.test(posRaw)){showTip('位点格式错误');return;}
+    let [s,e]=posRaw.split('-').map(Number);if(!e)e=s;
+    if(s<1||e>templateDNA.length||e<s){showTip('位点超出范围');return;}
+    let base=baseInput.value.trim().toUpperCase();
+    if(type!=='del'&&!/^[ATGC]$/.test(base)){showTip('请输入 A/T/G/C');return;}
+
+    const before=templateDNA;
+    if(type==='sub')templateDNA=before.slice(0,s-1)+base+before.slice(s);
+    else if(type==='ins')templateDNA=before.slice(0,s-1)+base+before.slice(s-1);
+    else templateDNA=before.slice(0,s-1)+before.slice(e);
+
+    renderAll(templateDNA,mutDNA);
+    addHist(type,posRaw,base,before,templateDNA);
+    showTip('');
+  });
+  document.getElementById('resetBtn').onclick=()=>{templateDNA='TATTGAAACTTGCGGTGCGAA';renderAll(templateDNA,mutDNA);historyList.innerHTML='';};
+
+  function showTip(msg){tipChip.textContent=msg;tipChip.style.display=msg?'inline-flex':'none';}
+
+  function addHist(type,pos,base,before,after){
+    const map={sub:'替换',ins:'插入',del:'缺失'};
+    const div=document.createElement('div');
+    div.innerHTML=
+      `<p class="md-body-small"><strong>在位点 ${pos}</strong> 发生${map[type]}${type!=='del'?` → <span class="base-${base}">${base}</span>`:''}</p>`+
+      `<pre class="md-body-small">前：${colour(before)}</pre>`+
+      `<pre class="md-body-small">后：${colour(after)}</pre><hr>`;
+    historyList.prepend(div);
+  }
+</script>
+</body>
+</html>
