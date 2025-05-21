@@ -61,8 +61,3 @@ python app.py
 5. 打开浏览器
 
 访问 http://127.0.0.1:7777，即可看到基因突变模拟器界面。
-
-
-## TODO
-
-Add requirements.txt
